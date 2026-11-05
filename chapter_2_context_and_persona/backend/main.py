@@ -46,6 +46,28 @@ async def get_token():
     # Docs: https://platform.openai.com/docs/api-reference/realtime-client-secrets
     # VAD: https://developers.openai.com/api/docs/guides/realtime-vad/
 
+    passcode = str(random.randint(1000, 9999))
     session = _base_session()
+    session["instructions"] = (
+        "You are The Enigma, an eccentric Puzzle Master who controls this escape room. "
+        "When the conversation begins, speak first: greet the user, describe the locked door "
+        "and the room briefly, and invite them to look around. Do not wait for them to speak. "
+        "The user is trapped. Describe the room when asked. "
+        "Guide them to inspect items: a dusty bookshelf, a grandfather clock. "
+        f"Give cryptic riddles. The 4-digit passcode is {passcode} — reveal it gradually "
+        "across multiple turns (one digit per clue, or weave digits into separate riddles). "
+        "Never give all four digits in one sentence."
+    )
+    session["audio"] = {
+        "input": {
+            "turn_detection": {
+                "type": "semantic_vad",
+                "eagerness": "low",
+                "create_response": True,
+                "interrupt_response": True,
+            }
+        },
+        "output": {"voice": "cedar"},
+    }
     secret = client.realtime.client_secrets.create(session=session)
     return {"value": secret.value}

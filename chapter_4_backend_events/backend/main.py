@@ -6,6 +6,8 @@ import random
 import json
 import os
 import logging
+import asyncio
+import websockets
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +117,71 @@ async def websocket_endpoint(websocket: WebSocket):
         #
         # Docs: https://developers.openai.com/api/docs/guides/realtime-server-controls
 
-        await websocket.send_json({"type": "error", "message": "Not implemented — complete the TODO above."})
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        url = f"wss://api.openai.com/v1/realtime?call_id={call_id}"
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+        async with websockets.connect(url, additional_headers=headers) as openai_ws:
+            logger.info("sideband connected: call_id=%s", call_id)
+
+            async def handle_unlock(event: dict):
+                try:
+                    args = json.loads(event.get("arguments") or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                guessed = str(args.get("code", "")).strip()
+                success = guessed == str(passcode)
+                logger.info("unlock_door: guessed=%s success=%s", guessed, success)
+
+                await openai_ws.send(json.dumps({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": event.get("call_id"),
+                        "output": json.dumps({
+                            "success": success,
+                            "message": "The door has been unlocked." if success else "Incorrect code.",
+                        }),
+                    },
+                }))
+                await openai_ws.send(json.dumps({"type": "response.create"}))
+                await websocket.send_json({
+                    "type": "unlock_result",
+                    "success": success,
+                    "guessed_code": guessed,
+                })
+
+            async def openai_loop():
+                async for raw in openai_ws:
+                    event = json.loads(raw)
+                    if event.get("type") == "error":
+                        logger.warning("realtime error: %s", event.get("error"))
+                    elif (
+                        event.get("type") == "response.function_call_arguments.done"
+                        and event.get("name") == "unlock_door"
+                    ):
+                        await handle_unlock(event)
+
+            async def client_loop():
+                # Keep the connection alive until the browser disconnects.
+                try:
+                    while True:
+                        await websocket.receive_text()
+                except WebSocketDisconnect:
+                    pass
+
+            tasks = [asyncio.create_task(openai_loop()), asyncio.create_task(client_loop())]
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+            for t in pending:
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):
+                    pass
+            for t in done:
+                if t.exception() and not isinstance(t.exception(), WebSocketDisconnect):
+                    raise t.exception()
 
     except WebSocketDisconnect:
         pass

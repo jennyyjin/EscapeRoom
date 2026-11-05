@@ -51,6 +51,21 @@ def _base_session(passcode: str):
             },
             "output": {"voice": "cedar"},
         },
+        "tools": [
+            {
+                "type": "function",
+                "name": "unlock_door",
+                "description": "Unlock the door when the user provides the correct 4-digit passcode",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "The 4-digit code the user spoke"},
+                    },
+                    "required": ["code"],
+                },
+            },
+        ],
+        "tool_choice": "auto",
     }
 
 
