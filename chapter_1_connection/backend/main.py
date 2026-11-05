@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
 
 load_dotenv()
 
@@ -12,6 +13,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+client = OpenAI()
 
 
 @app.get("/get-token")
@@ -30,4 +33,10 @@ async def get_token():
     #
     # Docs: https://platform.openai.com/docs/api-reference/realtime-client-secrets
 
-    return {"error": "Not implemented — complete the TODO above!"}
+    secret = client.realtime.client_secrets.create(
+        session={
+            "type": "realtime",
+            "model": "gpt-realtime",
+        }
+    )
+    return {"value": secret.value}
