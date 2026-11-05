@@ -112,7 +112,7 @@ async def websocket_endpoint(websocket: WebSocket):
         url = f"wss://api.openai.com/v1/realtime?call_id={call_id}"
         extra_headers = {"Authorization": f"Bearer {api_key}"}
 
-        async with websockets.connect(url, extra_headers=extra_headers) as openai_ws:
+        async with websockets.connect(url, additional_headers=extra_headers) as openai_ws:
             async def forward_from_openai():
                 try:
                     async for raw in openai_ws:
